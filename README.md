@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Arogya Relay
 
 Arogya Relay is an offline-first disease-monitoring interface designed for
