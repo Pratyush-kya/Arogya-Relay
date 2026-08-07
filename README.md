@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Arogya Relay
 
 Arogya Relay is an offline-first disease-monitoring interface designed for
@@ -137,3 +138,7 @@ approved under the regulations that apply in each deployment region.
 Use a separate branch for each change. Run the build and lint checks before
 opening a pull request, and never include sensitive health data in issues,
 commits, screenshots, test fixtures, or example records.
+=======
+# Arogya-Relay
+Arogya Relay is an offline-first disease-monitoring prototype for health workers in remote areas. It supports guided screenings, vital-sign capture, outbreak alerts, priority case queues, referrals, device diagnostics, and delayed report syncing. Built with Next.js, React, TypeScript, Vinext, and Cloudflare tooling.
+>>>>>>> c20934c1141cf07d7c6dbc1f6e2e36645eb76bf4
