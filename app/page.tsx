@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Tab = "overview" | "cases" | "device";
 type SyncState = "ready" | "syncing" | "done";
@@ -48,6 +48,9 @@ export default function Home() {
   const [screeningOpen, setScreeningOpen] = useState(false);
   const [syncState, setSyncState] = useState<SyncState>("ready");
   const [notice, setNotice] = useState("14 reports are stored safely on this device.");
+  const syncTimer = useRef<number | null>(null);
+  const modalRef = useRef<HTMLElement | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
 
   const syncLabel = useMemo(() => {
     if (syncState === "syncing") return "Syncing reports…";
@@ -55,11 +58,54 @@ export default function Home() {
     return "Sync 14 reports";
   }, [syncState]);
 
+  // Clear any pending sync timer if the component unmounts, so no state update
+  // is attempted after teardown.
+  useEffect(() => {
+    return () => {
+      if (syncTimer.current !== null) window.clearTimeout(syncTimer.current);
+    };
+  }, []);
+
+  const closeScreening = useCallback(() => {
+    setScreeningOpen(false);
+    // Return keyboard focus to whatever opened the dialog (WCAG 2.2, 2.4.3).
+    openerRef.current?.focus();
+  }, []);
+
+  const openScreening = useCallback((event?: { currentTarget: HTMLElement }) => {
+    openerRef.current = event?.currentTarget ?? null;
+    setScreeningOpen(true);
+  }, []);
+
+  // Escape closes the dialog, and focus is moved into it when it opens.
+  useEffect(() => {
+    if (!screeningOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeScreening();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    modalRef.current?.querySelector<HTMLElement>("input, textarea, button")?.focus();
+
+    // Stop the page behind the dialog from scrolling.
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [screeningOpen, closeScreening]);
+
   function syncReports() {
     if (syncState !== "ready") return;
     setSyncState("syncing");
     setNotice("Sending encrypted reports over the available 2G connection.");
-    window.setTimeout(() => {
+    syncTimer.current = window.setTimeout(() => {
       setSyncState("done");
       setNotice("All reports reached the district health hub.");
     }, 1400);
@@ -67,7 +113,7 @@ export default function Home() {
 
   function saveScreening(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setScreeningOpen(false);
+    closeScreening();
     setNotice("Screening AR-1082 saved offline and added to the review queue.");
   }
 
@@ -84,19 +130,25 @@ export default function Home() {
 
         <nav className="side-nav">
           <button
+            type="button"
             className={activeTab === "overview" ? "nav-item active" : "nav-item"}
+            aria-current={activeTab === "overview" ? "page" : undefined}
             onClick={() => setActiveTab("overview")}
           >
             <span className="nav-glyph">⌂</span> Overview
           </button>
           <button
+            type="button"
             className={activeTab === "cases" ? "nav-item active" : "nav-item"}
+            aria-current={activeTab === "cases" ? "page" : undefined}
             onClick={() => setActiveTab("cases")}
           >
             <span className="nav-glyph">◎</span> Case queue <b>3</b>
           </button>
           <button
+            type="button"
             className={activeTab === "device" ? "nav-item active" : "nav-item"}
+            aria-current={activeTab === "device" ? "page" : undefined}
             onClick={() => setActiveTab("device")}
           >
             <span className="nav-glyph">▣</span> Field device
@@ -114,11 +166,11 @@ export default function Home() {
         <div className="worker-card">
           <div className="avatar">SN</div>
           <div><strong>Sara Nongrum</strong><span>Community health worker</span></div>
-          <button aria-label="Open account menu">•••</button>
+          <button type="button" aria-label="Open account menu">•••</button>
         </div>
       </aside>
 
-      <section className="workspace">
+      <section className="workspace" id="main-content">
         <header className="topbar">
           <div>
             <span className="location-kicker">FIELD UNIT 04</span>
@@ -126,8 +178,8 @@ export default function Home() {
           </div>
           <div className="top-actions">
             <div className="today"><span>Wednesday</span><strong>05 Aug 2026</strong></div>
-            <button className="quiet-icon" aria-label="Notifications">●<span /></button>
-            <button className="primary-button" onClick={() => setScreeningOpen(true)}>
+            <button type="button" className="quiet-icon" aria-label="Notifications">●<span /></button>
+            <button type="button" className="primary-button" onClick={openScreening}>
               <span aria-hidden="true">＋</span> New screening
             </button>
           </div>
@@ -136,22 +188,23 @@ export default function Home() {
         <div className="notice-strip" role="status" aria-live="polite">
           <span className={syncState === "done" ? "status-dot synced" : "status-dot"} />
           <p>{notice}</p>
-          <button onClick={syncReports} disabled={syncState !== "ready"}>{syncLabel}</button>
+          <button type="button" onClick={syncReports} disabled={syncState !== "ready"}>{syncLabel}</button>
         </div>
 
         {activeTab === "overview" && (
           <Overview
-            onNewScreening={() => setScreeningOpen(true)}
+            onNewScreening={openScreening}
             onOpenCases={() => setActiveTab("cases")}
           />
         )}
-        {activeTab === "cases" && <CaseQueue onNewScreening={() => setScreeningOpen(true)} />}
+        {activeTab === "cases" && <CaseQueue onNewScreening={openScreening} />}
         {activeTab === "device" && <DevicePanel />}
       </section>
 
       {screeningOpen && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setScreeningOpen(false)}>
+        <div className="modal-backdrop" role="presentation" onMouseDown={closeScreening}>
           <section
+            ref={modalRef}
             className="screening-modal"
             role="dialog"
             aria-modal="true"
@@ -160,27 +213,27 @@ export default function Home() {
           >
             <header>
               <div><span className="eyebrow">OFFLINE CAPTURE</span><h2 id="screening-title">New field screening</h2></div>
-              <button onClick={() => setScreeningOpen(false)} aria-label="Close screening">×</button>
+              <button type="button" onClick={closeScreening} aria-label="Close screening">×</button>
             </header>
-            <form onSubmit={saveScreening}>
+            <form onSubmit={saveScreening} noValidate={false} autoComplete="off">
               <div className="form-grid">
-                <label>Patient reference<input required placeholder="e.g. NR-1049" /></label>
-                <label>Age<input required type="number" min="0" max="120" placeholder="Years" /></label>
-                <label>Body temperature<input required type="number" step="0.1" placeholder="°C" /></label>
-                <label>Oxygen saturation<input required type="number" min="50" max="100" placeholder="SpO₂ %" /></label>
+                <label>Patient reference<input required name="patient-reference" autoComplete="off" maxLength={32} pattern="[A-Za-z0-9\\-]{2,32}" title="Letters, numbers and hyphens only" placeholder="e.g. NR-1049" /></label>
+                <label>Age<input required name="age" type="number" min="0" max="120" step="1" inputMode="numeric" placeholder="Years" /></label>
+                <label>Body temperature<input required name="temperature" type="number" step="0.1" min="30" max="45" inputMode="decimal" placeholder="°C" /></label>
+                <label>Oxygen saturation<input required name="spo2" type="number" min="50" max="100" step="1" inputMode="numeric" placeholder="SpO₂ %" /></label>
               </div>
               <fieldset>
                 <legend>Symptoms observed</legend>
                 <div className="symptom-grid">
                   {['Fever', 'Cough', 'Rapid breathing', 'Diarrhoea', 'Rash', 'Severe fatigue'].map((symptom) => (
-                    <label key={symptom}><input type="checkbox" /> <span>{symptom}</span></label>
+                    <label key={symptom}><input type="checkbox" name="symptoms" value={symptom} /> <span>{symptom}</span></label>
                   ))}
                 </div>
               </fieldset>
-              <label className="notes-label">Field notes<textarea rows={3} placeholder="Exposure, onset, travel, or other observations" /></label>
+              <label className="notes-label">Field notes<textarea rows={3} name="field-notes" maxLength={2000} placeholder="Exposure, onset, travel, or other observations" /></label>
               <div className="protocol-note"><strong>Screening support only.</strong> Arogya Relay highlights patterns; it does not diagnose. Apply local clinical and referral protocols.</div>
               <footer>
-                <button type="button" className="secondary-button" onClick={() => setScreeningOpen(false)}>Cancel</button>
+                <button type="button" className="secondary-button" onClick={closeScreening}>Cancel</button>
                 <button className="primary-button" type="submit">Save assessment offline</button>
               </footer>
             </form>
@@ -206,7 +259,7 @@ function Overview({ onNewScreening, onOpenCases }: { onNewScreening: () => void;
             <h2>Symptoms are rising in North Ridge.</h2>
             <p>Twelve people reported cough with fever today. That is <strong>38% above</strong> this cluster’s seven-day baseline.</p>
             <div className="trend-actions">
-              <button className="dark-button" onClick={onOpenCases}>Review 6 linked cases</button>
+              <button type="button" className="dark-button" onClick={onOpenCases}>Review 6 linked cases</button>
               <span>Updated 8 min ago</span>
             </div>
           </div>
@@ -227,7 +280,7 @@ function Overview({ onNewScreening, onOpenCases }: { onNewScreening: () => void;
           </div>
           <div className="urgent-reading"><span>SpO₂</span><strong>91%</strong><em>Low reading</em></div>
           <p className="urgent-note">Fever and rapid breathing recorded 12 minutes ago.</p>
-          <button onClick={onOpenCases}>Open referral brief <span>→</span></button>
+          <button type="button" onClick={onOpenCases}>Open referral brief <span>→</span></button>
         </article>
       </section>
 
@@ -242,7 +295,7 @@ function Overview({ onNewScreening, onOpenCases }: { onNewScreening: () => void;
         <article className="panel cases-panel">
           <header className="panel-header">
             <div><span className="eyebrow">PRIORITY REVIEW</span><h2>Recent screening signals</h2></div>
-            <button onClick={onOpenCases}>View all cases →</button>
+            <button type="button" onClick={onOpenCases}>View all cases →</button>
           </header>
           <div className="case-list">
             {alerts.map((alert) => <AlertRow key={alert.id} alert={alert} />)}
@@ -258,7 +311,7 @@ function Overview({ onNewScreening, onOpenCases }: { onNewScreening: () => void;
             <div><span>Battery</span><strong>76%</strong><i><b style={{ width: '76%' }} /></i></div>
             <div><span>Sensor check</span><strong>Passed</strong><em>Today, 08:10</em></div>
           </div>
-          <button className="secondary-button full" onClick={onNewScreening}>Start a guided screening</button>
+          <button type="button" className="secondary-button full" onClick={onNewScreening}>Start a guided screening</button>
         </article>
       </section>
     </div>
@@ -276,7 +329,7 @@ function AlertRow({ alert }: { alert: typeof alerts[number] }) {
       <div className="case-person"><strong>{alert.age}</strong><span>{alert.village} · {alert.id}</span></div>
       <div className="case-signal"><strong>{alert.signal}</strong><span>{alert.reading}</span></div>
       <div className="case-time"><span className={`priority ${alert.tone}`}>{alert.priority}</span><small>{alert.time}</small></div>
-      <button aria-label={`Open case ${alert.id}`}>›</button>
+      <button type="button" aria-label={`Open case ${alert.id}`}>›</button>
     </div>
   );
 }
@@ -284,10 +337,10 @@ function AlertRow({ alert }: { alert: typeof alerts[number] }) {
 function CaseQueue({ onNewScreening }: { onNewScreening: () => void }) {
   return (
     <div className="page-content section-page">
-      <div className="page-heading"><div><span className="eyebrow">TRIAGE WORKSPACE</span><h1>Case queue</h1><p>Prioritized screening signals awaiting review or referral.</p></div><button className="primary-button" onClick={onNewScreening}>＋ New screening</button></div>
+      <div className="page-heading"><div><span className="eyebrow">TRIAGE WORKSPACE</span><h1>Case queue</h1><p>Prioritized screening signals awaiting review or referral.</p></div><button type="button" className="primary-button" onClick={onNewScreening}>＋ New screening</button></div>
       <div className="queue-summary"><span><strong>1</strong> urgent</span><span><strong>2</strong> review</span><span><strong>8</strong> follow-up</span><span><strong>36</strong> cleared today</span></div>
       <article className="panel cases-panel full-table">
-        <div className="table-tools"><label>Search cases<input placeholder="Patient ID or village" /></label><div><button className="filter active">All signals</button><button className="filter">Urgent</button><button className="filter">Review</button></div></div>
+        <div className="table-tools"><label>Search cases<input type="search" name="case-search" autoComplete="off" placeholder="Patient ID or village" /></label><div><button type="button" className="filter active" aria-pressed="true">All signals</button><button type="button" className="filter" aria-pressed="false">Urgent</button><button type="button" className="filter" aria-pressed="false">Review</button></div></div>
         <div className="case-list">{alerts.map((alert) => <AlertRow key={alert.id} alert={alert} />)}</div>
         <p className="queue-footnote">Demo queue · Patient names are represented by initials to support privacy in shared environments.</p>
       </article>
