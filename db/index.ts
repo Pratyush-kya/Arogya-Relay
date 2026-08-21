@@ -8,9 +8,9 @@ import * as schema from "./schema";
  * `@cloudflare/workers-types` exposes `Env` as a global interface, so it is
  * augmented here rather than inside a module block.
  *
- * `.openai/hosting.json` currently sets `d1: null`, meaning no D1 binding is
- * injected. `DB` is therefore optional: the guard in `getDb()` is a real
- * runtime check, not dead code.
+ * `.openai/hosting.json` currently sets `d1: "DB"` and `r2: "R2"`, which
+ * inject the real bindings. `DB` and `R2` remain optional behind real runtime
+ * guards, so the app still builds and runs in a pure-frontend mode.
  */
 declare global {
   // A namespace is required here: @cloudflare/workers-types exposes its
@@ -19,6 +19,7 @@ declare global {
   namespace Cloudflare {
     interface Env {
       DB?: D1Database;
+      R2?: R2Bucket;
     }
   }
 }
@@ -31,4 +32,14 @@ export function getDb() {
   }
 
   return drizzle(env.DB, { schema });
+}
+
+/** Returns the R2 bucket for approved documents / model / knowledge-pack assets. */
+export function getR2() {
+  if (!env.R2) {
+    throw new Error(
+      "Cloudflare R2 binding `R2` is unavailable. Set the `r2` field in .openai/hosting.json to `R2` or let your control plane inject the real binding values before using object storage."
+    );
+  }
+  return env.R2;
 }

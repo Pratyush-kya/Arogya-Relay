@@ -35,6 +35,11 @@ test("server-renders the Arogya Relay dashboard", async () => {
   assert.match(html, /Symptoms are rising in North Ridge\./);
   assert.match(html, /New screening/);
   assert.match(html, /Offline capture is active\./);
+<<<<<<< HEAD
+=======
+  // Care Guidance assistant is reachable from the dashboard navigation.
+  assert.match(html, /Care guidance/);
+>>>>>>> 8fc2b61 (Harden Arogya Relay: API request guards, security headers, working interactions, code-split workspaces, CI + security docs)
 });
 
 test("keeps the key dashboard workflows interactive and responsive", async () => {
@@ -46,19 +51,69 @@ test("keeps the key dashboard workflows interactive and responsive", async () =>
 
   assert.match(page, /setActiveTab\("cases"\)/);
   assert.match(page, /openScreening/);
+<<<<<<< HEAD
   assert.match(page, /function syncReports\(\)/);
   assert.match(page, /function saveScreening\(/);
   assert.match(page, /role="dialog"/);
+=======
+  assert.match(page, /onOpenDevice/);
+  assert.doesNotMatch(page, /overview\.begin/);
+  assert.doesNotMatch(page, /overview\.guided/);
+  assert.match(page, /function syncReports\(\)/);
+  assert.match(page, /function saveScreening\(/);
+  assert.match(page, /role="dialog"/);
+  assert.match(page, /className="screening-layout"/);
+  assert.match(page, /className="screening-basics"/);
+>>>>>>> 8fc2b61 (Harden Arogya Relay: API request guards, security headers, working interactions, code-split workspaces, CI + security docs)
   assert.match(page, /aria-live="polite"/);
   assert.match(page, /Screening support only\./);
 
   assert.match(css, /@media \(max-width: 820px\)/);
   assert.match(css, /@media \(max-width: 520px\)/);
   assert.match(css, /prefers-reduced-motion: reduce/);
+<<<<<<< HEAD
   assert.match(readme, /frontend-only/i);
   assert.match(readme, /not a\s*>?\s*certified medical device/i);
 });
 
+=======
+  assert.match(css, /grid-template-columns: minmax\(240px, \.68fr\) minmax\(0, 1\.62fr\)/);
+  assert.match(css, /animation: modal-arrive \.3s/);
+  assert.match(css, /\.modal-backdrop,[\s\S]*\.screening-modal,[\s\S]*animation: none !important/);
+  assert.match(css, /Nearby Care compact scale/);
+  assert.match(css, /\.nc-filter-chips label \{[\s\S]*min-height: 42px/);
+  assert.match(css, /Nearby Care control alignment/);
+  assert.match(css, /appearance: none/);
+  assert.match(css, /\.nc-filter-rows \{[\s\S]*grid-template-columns: repeat\(3/);
+  assert.match(readme, /guarded demonstration API routes/i);
+  assert.match(readme, /not a\s*>?\s*certified medical device/i);
+});
+
+test("Care Guidance assistant is wired into the dashboard and the engine exists", async () => {
+  const [page, lib, css] = await Promise.all([
+    readFile(new URL("../app/care-guidance.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/clinical/engine.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  // The dashboard imports and renders the assistant.
+  assert.match(page, /care-guidance/);
+  assert.match(page, /assemblyGuidance|assembleGuidance/);
+  assert.match(page, /112/); // India emergency number surfaced on red flags
+  assert.match(page, /offline_fallback/);
+  assert.match(page, /id="care-mode-status"/);
+  assert.match(page, /aria-describedby="care-mode-status"/);
+  assert.match(css, /\.page-heading::after[\s\S]*pointer-events: none/);
+
+  // The deterministic engine returns the five required triage tiers.
+  assert.match(lib, /emergency/);
+  assert.match(lib, /same_day/);
+  assert.match(lib, /clinician_review/);
+  assert.match(lib, /self_care_information/);
+  assert.match(lib, /insufficient_information/);
+});
+
+>>>>>>> 8fc2b61 (Harden Arogya Relay: API request guards, security headers, working interactions, code-split workspaces, CI + security docs)
 
 /** Renders the site through the worker with an arbitrary request. */
 async function fetchWorker(request) {
@@ -83,7 +138,11 @@ test("sends the security headers that protect visitors", async () => {
   assert.match(header("strict-transport-security"), /max-age=31536000/);
   assert.equal(header("cross-origin-opener-policy"), "same-origin");
   assert.match(header("permissions-policy"), /camera=\(\)/);
+<<<<<<< HEAD
   assert.match(header("permissions-policy"), /geolocation=\(\)/);
+=======
+  assert.match(header("permissions-policy"), /geolocation=\(self\)/);
+>>>>>>> 8fc2b61 (Harden Arogya Relay: API request guards, security headers, working interactions, code-split workspaces, CI + security docs)
 
   // The implementation must never advertise the server stack.
   assert.equal(response.headers.get("x-powered-by"), null);
@@ -94,6 +153,10 @@ test("sends the security headers that protect visitors", async () => {
   assert.match(csp, /frame-ancestors 'none'/);
   assert.match(csp, /base-uri 'self'/);
   assert.match(csp, /form-action 'self'/);
+<<<<<<< HEAD
+=======
+  assert.match(csp, /a\.tile\.openstreetmap\.org/);
+>>>>>>> 8fc2b61 (Harden Arogya Relay: API request guards, security headers, working interactions, code-split workspaces, CI + security docs)
 });
 
 test("rejects HTTP methods the site does not serve", async () => {
@@ -162,4 +225,13 @@ test("keeps the dashboard reachable and operable by keyboard", async () => {
 
   // The pending sync timer must be cleaned up on unmount.
   assert.match(page, /clearTimeout\(syncTimer\.current\)/);
+<<<<<<< HEAD
+=======
+  assert.match(page, /clearTimeout\(selfCheckTimer\.current\)/);
+  assert.match(page, /className="device-tech-grid"/);
+  assert.match(page, /role="table"/);
+  assert.match(page, /runSelfCheck/);
+  const carePlan = await readFile(new URL("../app/care-plan.tsx", import.meta.url), "utf8");
+  assert.match(carePlan, /className="cg-card cp-editor"/);
+>>>>>>> 8fc2b61 (Harden Arogya Relay: API request guards, security headers, working interactions, code-split workspaces, CI + security docs)
 });
