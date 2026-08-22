@@ -32,13 +32,8 @@ const CONTENT_SECURITY_POLICY = [
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
-<<<<<<< HEAD
-  "img-src 'self' data: blob:",
-  "connect-src 'self'",
-=======
   "img-src 'self' data: blob: https://a.tile.openstreetmap.org https://b.tile.openstreetmap.org",
   "connect-src 'self' https://a.tile.openstreetmap.org https://b.tile.openstreetmap.org",
->>>>>>> 8fc2b61 (Harden Arogya Relay: API request guards, security headers, working interactions, code-split workspaces, CI + security docs)
   "media-src 'self'",
   "worker-src 'self' blob:",
   "manifest-src 'self'",
@@ -59,12 +54,8 @@ const PERMISSIONS_POLICY = [
   "camera=()",
   "display-capture=()",
   "encrypted-media=()",
-<<<<<<< HEAD
-  "geolocation=()",
-=======
   // Nearby Care requests geolocation only after explicit user consent.
   "geolocation=(self)",
->>>>>>> 8fc2b61 (Harden Arogya Relay: API request guards, security headers, working interactions, code-split workspaces, CI + security docs)
   "gyroscope=()",
   "magnetometer=()",
   "microphone=()",

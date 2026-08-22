@@ -6,10 +6,7 @@ import { withSecurityHeaders } from "./security-headers";
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
-<<<<<<< HEAD
-=======
   R2?: R2Bucket;
->>>>>>> 8fc2b61 (Harden Arogya Relay: API request guards, security headers, working interactions, code-split workspaces, CI + security docs)
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
