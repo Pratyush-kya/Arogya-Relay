@@ -8,6 +8,8 @@
  * medication orders) and the audit trail. Never treat this as production auth.
  */
 
+import { constantTimeEqual } from "@/lib/http-security";
+
 export type Role = "admin" | "doctor" | "health_worker" | "reviewer" | "anon";
 
 interface ResolvedActor {
@@ -28,8 +30,10 @@ export function resolveActor(request: Request): ResolvedActor {
   const adminToken = process.env.ADMIN_API_TOKEN;
   const doctorToken = process.env.DOCTOR_API_TOKEN;
 
-  if (adminToken && token === adminToken) return { role: "admin", actorId: "admin" };
-  if (doctorToken && token === doctorToken) return { role: "doctor", actorId: "doctor" };
+  // Constant-time comparison so a wrong token cannot be distinguished from a
+  // partially-correct one by measuring response timing.
+  if (adminToken && constantTimeEqual(token, adminToken)) return { role: "admin", actorId: "admin" };
+  if (doctorToken && constantTimeEqual(token, doctorToken)) return { role: "doctor", actorId: "doctor" };
 
   // Unknown token: treat as unauthenticated rather than guessing a role.
   return { role: "anon", actorId: "anonymous" };

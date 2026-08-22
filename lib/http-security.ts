@@ -51,3 +51,33 @@ export function cleanText(value: unknown, maxLength: number): string {
     ? value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, maxLength)
     : "";
 }
+
+/**
+ * Constant-time string comparison (timing-attack resistant).
+ *
+ * Used by the authorization helper to compare bearer tokens. A naive
+ * `===` short-circuits on the first mismatched byte, leaking timing signal
+ * that an attacker could use to guess a secret token byte-by-byte. This
+ * compares every byte regardless of where the first difference occurs and
+ * runs even when the lengths differ, so the comparison cost does not depend
+ * on the shared prefix.
+ *
+ * Implemented with only `TextEncoder` so it runs identically in the Cloudflare
+ * Workers runtime and in Node's test runner (no `node:crypto` dependency).
+ */
+export function constantTimeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const ab = encoder.encode(a);
+  const bb = encoder.encode(b);
+  const length = Math.max(ab.length, bb.length);
+  const padA = new Uint8Array(length);
+  const padB = new Uint8Array(length);
+  padA.set(ab);
+  padB.set(bb);
+
+  let difference = ab.length ^ bb.length;
+  for (let i = 0; i < length; i++) {
+    difference |= padA[i] ^ padB[i];
+  }
+  return difference === 0;
+}

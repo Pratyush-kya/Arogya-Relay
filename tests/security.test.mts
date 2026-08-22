@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cleanText, inspectJsonRequest } from "../lib/http-security.ts";
+import { cleanText, inspectJsonRequest, constantTimeEqual } from "../lib/http-security.ts";
 
 test("JSON request guard accepts a bounded same-origin request", () => {
   const request = new Request("https://example.test/api/care-guidance", {
@@ -27,4 +27,13 @@ test("free text is bounded and control characters are removed", () => {
   assert.equal(cleanText("  cough\u0000\nfever  ", 40), "cough  fever");
   assert.equal(cleanText("abcdefgh", 4), "abcd");
   assert.equal(cleanText(42, 4), "");
+});
+
+test("constantTimeEqual matches identical strings and rejects differing ones", () => {
+  assert.equal(constantTimeEqual("secret-token", "secret-token"), true);
+  assert.equal(constantTimeEqual("secret-token", "secret-token!"), false);
+  assert.equal(constantTimeEqual("secret-token", "secret-tokem"), false);
+  // Different lengths must not throw and must return false.
+  assert.equal(constantTimeEqual("a", "ab"), false);
+  assert.equal(constantTimeEqual("", ""), true);
 });

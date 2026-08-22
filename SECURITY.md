@@ -25,6 +25,32 @@ owner privately with:
 Revoke and rotate any secret that may have been disclosed. Never paste secrets
 into GitHub issues, pull requests, discussions, logs, or test fixtures.
 
+## Hardening already in place
+
+Arogya Relay's prototype security posture includes:
+
+- **Request guards** (`lib/http-security.ts`): every JSON API rejects
+  non-`application/json` content types, bodies whose declared size exceeds a
+  per-route ceiling, and cross-site or mismatched-origin writes via
+  `sec-fetch-site` / `Origin` checks.
+- **Role-based access control** (`lib/auth.ts`): admin/doctor gates are
+  enforced server-side. Bearer tokens are compared with a **constant-time**
+  helper (`constantTimeEqual`) so a wrong token cannot be distinguished from a
+  partially-correct one by response timing. The token mechanism is explicit,
+  reviewed scaffolding — a real deployment must replace it with a vetted
+  identity provider, MFA, and short-lived sessions.
+- **Edge security headers** (`worker/security-headers.ts`): every response
+  carries CSP, `X-Frame-Options: DENY`, `frame-ancestors 'none'`, HSTS,
+  `Referrer-Policy`, `Cross-Origin-Opener-Policy`, and a restrictive
+  Permissions-Policy. Server/implementation headers are stripped.
+- **SSRF guard** (`lib/clinical/online-adapter.ts`): online evidence lookup is
+  restricted to an allow-listed set of hosts; raw patient free text never
+  leaves the request boundary.
+- **Safe image handling**: the image optimizer does not process SVG sources by
+  default, preventing stored-XSS via uploaded SVGs.
+- **No `dangerouslySetInnerHTML` / `innerHTML` / `eval`** anywhere in the app,
+  so rendered guidance cannot be injected with script.
+
 ## Maintainer checks
 
 Before merging a change:
