@@ -35,7 +35,6 @@ test("server-renders the Arogya Relay dashboard", async () => {
   assert.match(html, /Symptoms are rising in North Ridge\./);
   assert.match(html, /New screening/);
   assert.match(html, /Offline capture is active\./);
-  // Care Guidance assistant is reachable from the dashboard navigation.
   assert.match(html, /Care guidance/);
 });
 
