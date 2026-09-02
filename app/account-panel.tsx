@@ -166,6 +166,7 @@ export function AccountPanel({ open, onToggle }: AccountPanelProps) {
       const cleanName = displayName || email.split("@")[0];
       const pseudoId = `${selectedRole.slice(0, 3)}-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10)}`;
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase.from("profiles") as any).upsert({
           id: result.data.user.id,
           role: selectedRole,
