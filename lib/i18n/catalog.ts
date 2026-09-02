@@ -63,6 +63,9 @@ export const CATALOG: Catalog = {
 
   // ── Overview (Tier 3) ──────────────────────────────────────────────────
   "overview.greeting": { tier: "tier3", en: "Good morning.", hi: "सुप्रभात।", or: "ଶୁଭ ସକାଳ।", bn: "সুপ্রভাত।", as: "শুভ সকাল।", te: "శుభోదయం.", mr: "शुभ सकाळ.", sat: "ᱥᱩᱵ ᱥᱟᱜᱩᱱ." },
+  "overview.greetingMorning": { tier: "tier3", en: "Good morning.", hi: "सुप्रभात।", or: "ଶୁଭ ସକାଳ।", bn: "সুপ্রভাত।", as: "শুভ সকাল।", te: "శుభోదయం.", mr: "शुभ सकाळ.", sat: "ᱥᱩᱵ ᱥᱟᱜᱩᱱ." },
+  "overview.greetingAfternoon": { tier: "tier3", en: "Good afternoon.", hi: "शुभ दोपहर।", or: "ଶୁଭ ଅପରାହ୍ନ।", bn: "শুভ অপরাহ্ন।", as: "শুভ আবেলি।", te: "శుభ మధ్యాహ్నం.", mr: "शुभ दुपार.", sat: "ᱥᱟᱹᱜᱩᱱ ᱛᱤᱠᱤᱱ." },
+  "overview.greetingEvening": { tier: "tier3", en: "Good evening.", hi: "शुभ संध्या।", or: "ଶୁଭ ସନ୍ଧ୍ୟା।", bn: "শুভ সন্ধ্যা।", as: "শুভ গধূলি।", te: "శుభ సాయంత్రం.", mr: "शुभ संध्याकाळ.", sat: "ᱥᱟᱹᱜᱩᱱ ᱟᱹᱭᱩᱵ." },
   "overview.subtitle": { tier: "tier3", en: "Here is what needs attention across your three villages.", hi: "यहाँ आपके तीन गाँवों में ध्यान देने योग्य बातें हैं।", or: "ଆପଣଙ୍କର ତିନି ଗାଁରେ ଯାହା ଧ୍ୟାନ ଦେବାକୁ ଆବଶ୍ୟକ।", bn: "আপনার তিনটি গ্রামে যা নজর দেওয়া দরকার।", as: "আপোনাৰ তিনিটা গাঁওত যিটো মনোযোগ দিব লাগে।", te: "మీ మూడు గ్రామాల్లో దృష్టి పెట్టాల్సినవి ఇవి.", mr: "तुझ्या तीन गावांमध्ये काय लक्ष द्यायचे आहे.", sat: "ᱟᱢᱟᱜ ᱯᱩᱱ ᱟᱹᱛᱩ ᱨᱮ ᱪᱮᱫ ᱧᱮᱞ ᱞᱟᱠᱛᱟ ᱢᱮᱱᱟᱜᱼᱟ᱾" },
   "overview.signals": { tier: "tier3", en: "Respiratory signal", hi: "श्वसन संकेत", or: "ଶ୍ୱାସପ୍ରଶ୍ୱାସ ସଙ୍କେତ", bn: "শ্বাসযন্ত্রের সিগনাল", as: "শ্বাস-প্ৰশ্বাসৰ চিহ্ন", te: "శ్వాసకోశ సంకేతం", mr: "श्वसन सिग्नल", sat: "ᱥᱟᱥ ᱪᱤᱱ" },
   "overview.urgentQueue": { tier: "tier3", en: "Urgent queue", hi: "तत्काल कतार", or: "ଜରୁରୀ ଧାଡ଼ି", bn: "জরুরি কিউ", as: "জৰুৰী কিউ", te: "అత్యవసర క్యూ", mr: "तातडीची यादी", sat: "ᱡᱩᱨᱩᱜ ᱞᱟᱭᱤᱱ" },

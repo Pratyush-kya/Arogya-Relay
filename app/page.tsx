@@ -339,15 +339,33 @@ export default function Home() {
   );
 }
 
+function getTimeGreetingKey(): string {
+  const hour = new Date().getHours();
+  if (hour >= 4 && hour < 12) return "overview.greetingMorning";
+  if (hour >= 12 && hour < 17) return "overview.greetingAfternoon";
+  return "overview.greetingEvening";
+}
+
 function Overview({ onOpenCases, onOpenDevice }: { onOpenCases: () => void; onOpenDevice: () => void }) {
   const { t } = useLanguage();
+  const [greetingKey, setGreetingKey] = useState<string>(getTimeGreetingKey);
+
+  useEffect(() => {
+    const updateGreeting = () => {
+      setGreetingKey(getTimeGreetingKey());
+    };
+    updateGreeting();
+    const timer = window.setInterval(updateGreeting, 60000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   return (
     <div className="page-content">
       <section className="overview-hero" aria-labelledby="overview-title">
         <div className="hero-atmosphere" aria-hidden="true"><i /><i /><i /></div>
         <div className="hero-copy">
           <span className="hero-kicker"><i /> {t("overview.kicker")}</span>
-          <h1 id="overview-title">{t("overview.greeting")}</h1>
+          <h1 id="overview-title" suppressHydrationWarning>{t(greetingKey)}</h1>
           <p>{t("overview.subtitle")}</p>
           <div className="hero-actions">
             <button type="button" className="glass-button" onClick={onOpenCases}>{t("overview.liveQueue")} <span>→</span></button>

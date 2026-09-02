@@ -30,7 +30,7 @@ test("server-renders the Arogya Relay dashboard", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>Arogya Relay — Offline-First Disease Monitoring for Field Health Workers<\/title>/i);
-  assert.match(html, /Good morning\./);
+  assert.match(html, /Good (morning|afternoon|evening)\./);
   assert.match(html, /Screenings today/);
   assert.match(html, /Symptoms are rising in North Ridge\./);
   assert.match(html, /New screening/);
