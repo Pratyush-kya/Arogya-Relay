@@ -165,13 +165,17 @@ export function AccountPanel({ open, onToggle }: AccountPanelProps) {
     if (result.data.user) {
       const cleanName = displayName || email.split("@")[0];
       const pseudoId = `${selectedRole.slice(0, 3)}-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10)}`;
-      await supabase.from("profiles").upsert({
-        id: result.data.user.id,
-        role: selectedRole,
-        display_name: cleanName,
-        pseudo_id: pseudoId,
-        facility_name: facilityName || null,
-      }).catch(() => null);
+      try {
+        await (supabase.from("profiles") as any).upsert({
+          id: result.data.user.id,
+          role: selectedRole,
+          display_name: cleanName,
+          pseudo_id: pseudoId,
+          facility_name: facilityName || null,
+        });
+      } catch {
+        // Continue if trigger handles it
+      }
     }
 
     setBusy(false);
