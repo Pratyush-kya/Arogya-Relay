@@ -1851,21 +1851,70 @@ body {
 
 .case-empty { margin: 0; padding: 32px 20px; color: var(--muted); font-size: 11px; text-align: center; }
 .case-brief {
-  display: grid;
-  grid-template-columns: minmax(180px, .8fr) minmax(0, 1.7fr) auto;
-  align-items: center;
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   margin: 14px 18px 0;
-  padding: 17px 18px;
-  border: 1px solid #cfe5da;
-  border-radius: 15px;
-  background: linear-gradient(135deg, #f4faf6, #fff);
+  padding: 20px 22px;
+  border: 1px solid #b7dfcc;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f0fbf5, #ffffff);
+  box-shadow: 0 4px 16px rgba(10, 40, 25, 0.05);
 }
-.case-brief h2 { margin: 5px 0 0; font-size: 15px; letter-spacing: -.025em; }
-.case-brief dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
-.case-brief dl > div { min-width: 0; }
-.case-brief dt { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
-.case-brief dd { margin: 5px 0 0; font-size: 10px; font-weight: 700; overflow-wrap: anywhere; }
+.case-brief-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+}
+.case-brief h2 { margin: 5px 0 0; font-size: 16px; font-weight: 800; color: #0f2e22; }
+.case-brief dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 14px; margin: 0; width: 100%; }
+.case-brief dl > div { min-width: 0; background: #ffffff; padding: 10px 12px; border-radius: 10px; border: 1px solid #d4ece1; }
+.case-brief dt { color: #356350; font-size: 10.5px; text-transform: uppercase; font-weight: 700; letter-spacing: .06em; }
+.case-brief dd { margin: 4px 0 0; font-size: 13.5px; font-weight: 700; color: #0d281e; overflow-wrap: anywhere; }
+.case-brief-doctor {
+  width: 100%;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #a4dbc2;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.case-brief-doctor h3 { margin: 0; font-size: 14px; font-weight: 800; color: #0b4530; display: flex; align-items: center; gap: 6px; }
+.case-brief-doctor textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #c2e2d4;
+  font-size: 13.5px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 60px;
+}
+.case-brief-doctor textarea:focus {
+  outline: 2px solid #0d6849;
+  border-color: #0d6849;
+}
+.case-eval-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #e1f7ec;
+  color: #09633e;
+}
+.case-brief-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+}
 .case-brief .secondary-button { white-space: nowrap; }
 
 .workspace-loader {

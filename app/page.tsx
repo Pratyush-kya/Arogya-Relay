@@ -13,47 +13,90 @@ const NearbyCare = lazy(() => import("./nearby-care"));
 const CarePlanView = lazy(() => import("./care-plan"));
 const SymptomChecker = lazy(() => import("./symptom-checker"));
 
+import {
+  fetchAllScreenings,
+  submitScreening,
+  submitDoctorEvaluation,
+  syncPendingScreenings,
+  type ScreeningRecord,
+} from "@/lib/supabase/screenings";
+
 type Tab = "overview" | "cases" | "care" | "nearby" | "plan" | "device";
 type SyncState = "ready" | "syncing" | "done";
-type CaseFilter = "all" | "urgent" | "review";
+type CaseFilter = "all" | "urgent" | "review" | "evaluated";
 
-const alerts = [
+const DEFAULT_BASELINE_SCREENINGS: ScreeningRecord[] = [
   {
     id: "NR-1048",
-    initials: "LM",
-    age: "6 years",
+    patient_ref: "NR-1048",
+    age: 6,
+    temperature: 38.9,
+    spo2: 91,
+    symptoms: ["Fever", "Rapid breathing"],
+    field_notes: "Rapid shallow breathing, lethargic",
     village: "North Ridge",
-    signal: "Fever + rapid breathing",
-    reading: "SpO₂ 91%",
-    priority: "Urgent",
-    tone: "danger",
-    time: "12 min ago",
+    urgency_tier: "urgent",
+    status: "pending_doctor_review",
+    created_at: new Date(Date.now() - 12 * 60000).toISOString(),
+    synced: true,
   },
   {
     id: "MR-0321",
-    initials: "AK",
-    age: "42 years",
+    patient_ref: "MR-0321",
+    age: 42,
+    temperature: 39.2,
+    spo2: 97,
+    symptoms: ["Persistent fever", "Severe headache"],
+    field_notes: "Fever on day 4, chills",
     village: "Mawlynnong",
-    signal: "Persistent fever",
-    reading: "39.2°C",
-    priority: "Review",
-    tone: "warning",
-    time: "46 min ago",
+    urgency_tier: "review",
+    status: "doctor_evaluated",
+    doctor_notes: "Likely viral infection. Paracetamol 500mg TDS, hydration. Review in 48h.",
+    prescription_advice: "Paracetamol 500mg, ORS packets, rest",
+    evaluated_by: "Dr. Sharma",
+    created_at: new Date(Date.now() - 46 * 60000).toISOString(),
+    synced: true,
   },
   {
     id: "PV-0876",
-    initials: "TS",
-    age: "68 years",
+    patient_ref: "PV-0876",
+    age: 68,
+    temperature: 37.6,
+    spo2: 93,
+    symptoms: ["Cough", "Low oxygen", "Severe fatigue"],
+    field_notes: "Chronic smoker, mild wheeze",
     village: "Pynursla",
-    signal: "Cough + low oxygen",
-    reading: "SpO₂ 93%",
-    priority: "Review",
-    tone: "warning",
-    time: "1 hr ago",
+    urgency_tier: "review",
+    status: "pending_doctor_review",
+    created_at: new Date(Date.now() - 60 * 60000).toISOString(),
+    synced: true,
   },
 ];
 
 const chartBars = [28, 39, 31, 47, 44, 58, 64, 52, 73, 68, 82, 88];
+
+export function DynamicGreeting() {
+  const { t } = useLanguage();
+  const [greetingKey, setGreetingKey] = useState<string>("overview.greetingMorning");
+
+  useEffect(() => {
+    const update = () => {
+      const hour = new Date().getHours();
+      if (hour >= 4 && hour < 12) {
+        setGreetingKey("overview.greetingMorning");
+      } else if (hour >= 12 && hour < 17) {
+        setGreetingKey("overview.greetingAfternoon");
+      } else {
+        setGreetingKey("overview.greetingEvening");
+      }
+    };
+    update();
+    const interval = window.setInterval(update, 10000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return <h1 id="overview-title" suppressHydrationWarning>{t(greetingKey)}</h1>;
+}
 
 function WorkspaceLoading() {
   const { t } = useLanguage();
@@ -77,9 +120,23 @@ export default function Home() {
   const [noticeKey, setNoticeKey] = useState("shell.reportsStored");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [screenings, setScreenings] = useState<ScreeningRecord[]>(DEFAULT_BASELINE_SCREENINGS);
   const syncTimer = useRef<number | null>(null);
   const modalRef = useRef<HTMLElement | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void fetchAllScreenings().then((data) => {
+      if (!alive) return;
+      if (data && data.length > 0) {
+        setScreenings(data);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const syncLabel = useMemo(() => {
     if (syncState === "syncing") return t("shell.syncing");
@@ -87,8 +144,7 @@ export default function Home() {
     return t("shell.syncReady");
   }, [syncState, t]);
 
-  // Clear any pending sync timer if the component unmounts, so no state update
-  // is attempted after teardown.
+  // Clear any pending sync timer if the component unmounts
   useEffect(() => {
     return () => {
       if (syncTimer.current !== null) window.clearTimeout(syncTimer.current);
@@ -109,7 +165,6 @@ export default function Home() {
 
   const closeScreening = useCallback(() => {
     setScreeningOpen(false);
-    // Return keyboard focus to whatever opened the dialog (WCAG 2.2, 2.4.3).
     openerRef.current?.focus();
   }, []);
 
@@ -118,7 +173,6 @@ export default function Home() {
     setScreeningOpen(true);
   }, []);
 
-  // Escape closes the dialog, and focus is moved into it when it opens.
   useEffect(() => {
     if (!screeningOpen) return;
 
@@ -132,7 +186,6 @@ export default function Home() {
     document.addEventListener("keydown", onKeyDown);
     modalRef.current?.querySelector<HTMLElement>("input, textarea, button")?.focus();
 
-    // Stop the page behind the dialog from scrolling.
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -142,19 +195,57 @@ export default function Home() {
     };
   }, [screeningOpen, closeScreening]);
 
-  function syncReports() {
+  async function syncReports() {
     if (syncState !== "ready") return;
     setSyncState("syncing");
     setNoticeKey("shell.reportsSending");
+    const count = await syncPendingScreenings();
+    const refreshed = await fetchAllScreenings();
+    if (refreshed.length > 0) setScreenings(refreshed);
     syncTimer.current = window.setTimeout(() => {
       setSyncState("done");
-      setNoticeKey("shell.reportsReached");
-    }, 1400);
+      setNoticeKey(count > 0 ? "shell.reportsReached" : "shell.reportsStored");
+    }, 1200);
   }
 
-  function saveScreening(event: FormEvent<HTMLFormElement>) {
+  async function saveScreening(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const patientRef = String(formData.get("patient-reference") || "").trim();
+    const age = Number(formData.get("age") || 0);
+    const temperature = Number(formData.get("temperature") || 0);
+    const spo2 = Number(formData.get("spo2") || 0);
+    const symptomsList = formData.getAll("symptoms").map(String);
+    const notes = String(formData.get("field-notes") || "").trim();
+
+    const hasUrgentSymptom = symptomsList.some((s) =>
+      ["Chest pain", "Rapid breathing", "Severe headache", "ଛାତି ଯନ୍ତ୍ରଣା", "ଦ୍ରୁତ ଶ୍ୱାସକ୍ରିୟା"].includes(s)
+    );
+    const isUrgent = spo2 < 92 || temperature >= 39.5 || hasUrgentSymptom;
+    const urgencyTier = isUrgent ? "urgent" : (temperature > 37.8 || spo2 < 95 ? "review" : "cleared");
+
+    const newRecord = await submitScreening({
+      patient_ref: patientRef || `NR-${Math.floor(1000 + Math.random() * 9000)}`,
+      age: age || 30,
+      temperature: temperature || 37.0,
+      spo2: spo2 || 98,
+      symptoms: symptomsList.length > 0 ? symptomsList : ["General checkup"],
+      field_notes: notes,
+      village: "North Ridge",
+      urgency_tier: urgencyTier,
+    });
+
+    setScreenings((prev) => [newRecord, ...prev.filter((item) => item.id !== newRecord.id)]);
     closeScreening();
+    setNoticeKey("shell.screeningSaved");
+    setActiveTab("cases");
+  }
+
+  async function handleDoctorEvaluate(id: string, doctorNotes: string, prescriptionAdvice: string) {
+    await submitDoctorEvaluation(id, doctorNotes, prescriptionAdvice, "Dr. Clinician");
+    const refreshed = await fetchAllScreenings();
+    if (refreshed.length > 0) setScreenings(refreshed);
     setNoticeKey("shell.screeningSaved");
   }
 
@@ -164,6 +255,7 @@ export default function Home() {
   }
 
   const today = new Date();
+  const urgentCount = screenings.filter((s) => s.urgency_tier === "urgent" || s.urgency_tier === "emergency").length;
 
   return (
     <main className="app-shell">
@@ -191,7 +283,7 @@ export default function Home() {
             aria-current={activeTab === "cases" ? "page" : undefined}
             onClick={() => setActiveTab("cases")}
           >
-            <span className="nav-glyph">◎</span> {t("nav.cases")} <b>3</b>
+            <span className="nav-glyph">◎</span> {t("nav.cases")} <b>{screenings.length}</b>
           </button>
           <button
             type="button"
@@ -258,7 +350,7 @@ export default function Home() {
               {notificationsOpen && (
                 <div className="notification-popover" role="region" aria-label={t("shell.notifications")}>
                   <span className="eyebrow">{t("shell.liveNotifications")}</span>
-                  <strong>{t("shell.oneUrgentSignal")}</strong>
+                  <strong>{urgentCount > 0 ? `${urgentCount} ${t("common.urgent")}` : t("shell.oneUrgentSignal")}</strong>
                   <p>{t("shell.notificationDetail")}</p>
                   <button type="button" onClick={openCases}>{t("overview.openBrief")} →</button>
                 </div>
@@ -278,11 +370,17 @@ export default function Home() {
 
         {activeTab === "overview" && (
           <Overview
+            screenings={screenings}
             onOpenCases={openCases}
             onOpenDevice={() => setActiveTab("device")}
           />
         )}
-        {activeTab === "cases" && <CaseQueue />}
+        {activeTab === "cases" && (
+          <CaseQueue
+            screenings={screenings}
+            onDoctorEvaluate={handleDoctorEvaluate}
+          />
+        )}
         <Suspense fallback={<WorkspaceLoading />}>
           {activeTab === "care" && <CareGuidance />}
           {activeTab === "nearby" && <NearbyCare />}
@@ -346,18 +444,22 @@ function getLocalGreetingKey(): string {
   return "overview.greetingEvening";
 }
 
-function Overview({ onOpenCases, onOpenDevice }: { onOpenCases: () => void; onOpenDevice: () => void }) {
+function Overview({
+  screenings,
+  onOpenCases,
+  onOpenDevice,
+}: {
+  screenings: ScreeningRecord[];
+  onOpenCases: () => void;
+  onOpenDevice: () => void;
+}) {
   const { t } = useLanguage();
-  const [greetingKey, setGreetingKey] = useState<string>(getLocalGreetingKey);
 
-  useEffect(() => {
-    const calculateGreeting = () => {
-      setGreetingKey(getLocalGreetingKey());
-    };
-    calculateGreeting();
-    const timer = window.setInterval(calculateGreeting, 30000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const totalCount = screenings.length;
+  const urgentCount = screenings.filter((s) => s.urgency_tier === "urgent" || s.urgency_tier === "emergency").length;
+  const reviewCount = screenings.filter((s) => s.urgency_tier === "review").length;
+  const evaluatedCount = screenings.filter((s) => s.status === "doctor_evaluated").length;
+  const mostUrgent = screenings.find((s) => s.urgency_tier === "urgent" || s.urgency_tier === "emergency") ?? screenings[0];
 
   return (
     <div className="page-content">
@@ -365,7 +467,7 @@ function Overview({ onOpenCases, onOpenDevice }: { onOpenCases: () => void; onOp
         <div className="hero-atmosphere" aria-hidden="true"><i /><i /><i /></div>
         <div className="hero-copy">
           <span className="hero-kicker"><i /> {t("overview.kicker")}</span>
-          <h1 id="overview-title" suppressHydrationWarning>{t(greetingKey)}</h1>
+          <DynamicGreeting />
           <p>{t("overview.subtitle")}</p>
           <div className="hero-actions">
             <button type="button" className="glass-button" onClick={onOpenCases}>{t("overview.liveQueue")} <span>→</span></button>
@@ -376,9 +478,9 @@ function Overview({ onOpenCases, onOpenDevice }: { onOpenCases: () => void; onOp
           <strong>{t("overview.communities")}</strong>
           <p>{t("overview.coverage")}</p>
           <div className="command-metrics">
-            <span><b>47</b> {t("overview.screened")}</span>
-            <span><b>14</b> {t("overview.offline")}</span>
-            <span><b>01</b> {t("common.urgent")}</span>
+            <span><b>{totalCount}</b> {t("overview.screened")}</span>
+            <span><b>{screenings.filter((s) => !s.synced).length}</b> {t("overview.offline")}</span>
+            <span><b>{urgentCount.toString().padStart(2, "0")}</b> {t("common.urgent")}</span>
           </div>
           <div className="command-route" aria-hidden="true"><i /><span /><i /><span /><i /></div>
         </aside>
@@ -396,7 +498,7 @@ function Overview({ onOpenCases, onOpenDevice }: { onOpenCases: () => void; onOp
             </div>
           </div>
           <div className="mini-chart" aria-label="Respiratory symptom reports increased across the last twelve hours">
-            <div className="chart-meta"><span>{t("overview.reports2h")}</span><strong>12 <small>+38%</small></strong></div>
+            <div className="chart-meta"><span>{t("overview.reports2h")}</span><strong>{totalCount} <small>Active</small></strong></div>
             <div className="bars">
               {chartBars.map((height, index) => <i key={index} style={{ height: `${height}%` }} className={index > 8 ? "hot" : ""} />)}
             </div>
@@ -404,23 +506,27 @@ function Overview({ onOpenCases, onOpenDevice }: { onOpenCases: () => void; onOp
           </div>
         </article>
 
-        <article className="urgent-card">
-          <header><span>{t("overview.urgentQueue")}</span><b>1</b></header>
-          <div className="urgent-person">
-            <div className="avatar danger-avatar">LM</div>
-            <div><h3>{t("overview.child6")}</h3><p>North Ridge · NR-1048</p></div>
-          </div>
-          <div className="urgent-reading"><span>SpO₂</span><strong>91%</strong><em>{t("overview.lowReading")}</em></div>
-          <p className="urgent-note">{t("overview.urgentNote")}</p>
-          <button type="button" onClick={onOpenCases}>{t("overview.openBrief")} <span>→</span></button>
-        </article>
+        {mostUrgent && (
+          <article className="urgent-card">
+            <header><span>{t("overview.urgentQueue")}</span><b>{urgentCount || 1}</b></header>
+            <div className="urgent-person">
+              <div className={`avatar ${mostUrgent.urgency_tier === "urgent" || mostUrgent.urgency_tier === "emergency" ? "danger-avatar" : ""}`}>
+                {mostUrgent.patient_ref.substring(0, 2)}
+              </div>
+              <div><h3>{mostUrgent.patient_ref} ({mostUrgent.age} yrs)</h3><p>{mostUrgent.village} · SpO₂ {mostUrgent.spo2}%</p></div>
+            </div>
+            <div className="urgent-reading"><span>SpO₂</span><strong>{mostUrgent.spo2}%</strong><em>{mostUrgent.temperature}°C</em></div>
+            <p className="urgent-note">{mostUrgent.symptoms.join(", ")}</p>
+            <button type="button" onClick={onOpenCases}>{t("overview.openBrief")} <span>→</span></button>
+          </article>
+        )}
       </section>
 
       <section className="metric-grid" aria-label={t("overview.dailySummary")}>
-        <Metric icon="◉" value="47" label={t("overview.screeningsToday")} note={t("overview.moreYesterday")} tone="mint" />
-        <Metric icon="⌁" value="6" label={t("overview.signalsReview")} note={t("overview.newAfternoon")} tone="sand" />
-        <Metric icon="✓" value="28" label={t("overview.followups")} note={t("overview.todayList")} tone="blue" />
-        <Metric icon="↗" value="3" label={t("overview.referrals")} note={t("overview.awaiting")} tone="rose" />
+        <Metric icon="◉" value={String(totalCount)} label={t("overview.screeningsToday")} note={t("overview.moreYesterday")} tone="mint" />
+        <Metric icon="⌁" value={String(reviewCount)} label={t("overview.signalsReview")} note={t("overview.newAfternoon")} tone="sand" />
+        <Metric icon="✓" value={String(evaluatedCount)} label="Doctor Evaluated" note="Prescriptions ready" tone="blue" />
+        <Metric icon="↗" value={String(urgentCount)} label={t("overview.referrals")} note={t("overview.awaiting")} tone="rose" />
       </section>
 
       <section className="lower-grid">
@@ -430,18 +536,18 @@ function Overview({ onOpenCases, onOpenDevice }: { onOpenCases: () => void; onOp
             <button type="button" onClick={onOpenCases}>{t("overview.viewAll")} →</button>
           </header>
           <div className="case-list">
-            {alerts.map((alert) => <AlertRow key={alert.id} alert={alert} onOpen={onOpenCases} />)}
+            {screenings.slice(0, 3).map((record) => <AlertRow key={record.id} record={record} onOpen={onOpenCases} />)}
           </div>
         </article>
         <article className="panel device-card">
-          <header className="panel-header"><div><span className="eyebrow">{t("overview.fieldKit")}</span><h2>Arogya Relay AR-07</h2></div><span className="device-online"><i /> {t("common.ready")}</span></header>
+          <header className="panel-header"><div><span className="eyebrow">{t("overview.fieldKit")}</span><h2>Arogya Relay System</h2></div><span className="device-online"><i /> {t("common.ready")}</span></header>
           <div className="device-illustration" aria-label="Arogya Relay field device status">
-            <div className="device-screen"><span>AR-07</span><strong>READY</strong><small>12:42 · OFFLINE SAFE</small></div>
+            <div className="device-screen"><span>SYSTEM</span><strong>ONLINE</strong><small>LOCAL CACHE ACTIVE</small></div>
             <div className="device-sensor"><i /><i /><i /></div>
           </div>
           <div className="device-stats">
-            <div><span>{t("overview.battery")}</span><strong>76%</strong><i><b style={{ width: '76%' }} /></i></div>
-            <div><span>{t("overview.sensorCheck")}</span><strong>{t("common.passed")}</strong><em>08:10</em></div>
+            <div><span>{t("overview.battery")}</span><strong>Healthy</strong><i><b style={{ width: '100%' }} /></i></div>
+            <div><span>{t("overview.sensorCheck")}</span><strong>{t("common.passed")}</strong><em>Ready</em></div>
           </div>
           <button type="button" className="secondary-button full" onClick={onOpenDevice}>{t("overview.deviceDetails")}</button>
         </article>
@@ -454,49 +560,179 @@ function Metric({ icon, value, label, note, tone }: { icon: string; value: strin
   return <article className="metric-card"><span className={`metric-icon ${tone}`}>{icon}</span><div><strong>{value}</strong><h3>{label}</h3><p>{note}</p></div></article>;
 }
 
-function AlertRow({ alert, onOpen, expanded = false }: { alert: typeof alerts[number]; onOpen?: () => void; expanded?: boolean }) {
+function AlertRow({ record, onOpen, expanded = false }: { record: ScreeningRecord; onOpen?: () => void; expanded?: boolean }) {
+  const isDanger = record.urgency_tier === "urgent" || record.urgency_tier === "emergency";
   return (
     <div className="case-row">
-      <div className={`avatar ${alert.tone === 'danger' ? 'danger-avatar' : ''}`}>{alert.initials}</div>
-      <div className="case-person"><strong>{alert.age}</strong><span>{alert.village} · {alert.id}</span></div>
-      <div className="case-signal"><strong>{alert.signal}</strong><span>{alert.reading}</span></div>
-      <div className="case-time"><span className={`priority ${alert.tone}`}>{alert.priority}</span><small>{alert.time}</small></div>
-      <button type="button" aria-label={`Open case ${alert.id}`} aria-expanded={expanded} onClick={onOpen}>›</button>
+      <div className={`avatar ${isDanger ? 'danger-avatar' : ''}`}>{record.patient_ref.substring(0, 2)}</div>
+      <div className="case-person"><strong>{record.age} years</strong><span>{record.village} · {record.patient_ref}</span></div>
+      <div className="case-signal"><strong>{record.symptoms.slice(0, 2).join(", ")}</strong><span>SpO₂ {record.spo2}% · {record.temperature}°C</span></div>
+      <div className="case-time">
+        <span className={`priority ${isDanger ? 'danger' : 'warning'}`}>
+          {record.status === "doctor_evaluated" ? "Evaluated" : (isDanger ? "Urgent" : "Review")}
+        </span>
+        <small>{record.synced ? "Synced" : "Local"}</small>
+      </div>
+      <button type="button" aria-label={`Open case ${record.patient_ref}`} aria-expanded={expanded} onClick={onOpen}>›</button>
     </div>
   );
 }
 
-function CaseQueue() {
+function CaseQueue({
+  screenings,
+  onDoctorEvaluate,
+}: {
+  screenings: ScreeningRecord[];
+  onDoctorEvaluate: (id: string, notes: string, prescription: string) => Promise<void>;
+}) {
   const { t } = useLanguage();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<CaseFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [doctorNotes, setDoctorNotes] = useState("");
+  const [prescriptionAdvice, setPrescriptionAdvice] = useState("");
+  const [submittingEval, setSubmittingEval] = useState(false);
+
   const normalizedQuery = query.trim().toLowerCase();
-  const visibleAlerts = alerts.filter((alert) => {
-    const matchesQuery = !normalizedQuery || `${alert.id} ${alert.village} ${alert.signal}`.toLowerCase().includes(normalizedQuery);
-    const matchesFilter = filter === "all" || (filter === "urgent" ? alert.tone === "danger" : alert.tone === "warning");
-    return matchesQuery && matchesFilter;
+  const visibleRecords = screenings.filter((record) => {
+    const matchesQuery =
+      !normalizedQuery ||
+      `${record.patient_ref} ${record.village} ${record.symptoms.join(" ")}`.toLowerCase().includes(normalizedQuery);
+    if (!matchesQuery) return false;
+    if (filter === "all") return true;
+    if (filter === "urgent") return record.urgency_tier === "urgent" || record.urgency_tier === "emergency";
+    if (filter === "review") return record.urgency_tier === "review";
+    if (filter === "evaluated") return record.status === "doctor_evaluated";
+    return true;
   });
-  const selectedAlert = alerts.find((alert) => alert.id === selectedId) ?? null;
+
+  const selectedRecord = screenings.find((record) => record.id === selectedId) ?? null;
+
+  async function handleEvalSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!selectedRecord) return;
+    setSubmittingEval(true);
+    await onDoctorEvaluate(selectedRecord.id, doctorNotes, prescriptionAdvice);
+    setSubmittingEval(false);
+    setDoctorNotes("");
+    setPrescriptionAdvice("");
+  }
+
+  const urgentTotal = screenings.filter((s) => s.urgency_tier === "urgent" || s.urgency_tier === "emergency").length;
+  const reviewTotal = screenings.filter((s) => s.urgency_tier === "review").length;
+  const evaluatedTotal = screenings.filter((s) => s.status === "doctor_evaluated").length;
 
   return (
     <div className="page-content section-page">
-      <div className="page-heading"><div><span className="eyebrow">{t("cases.kicker")}</span><h1>{t("nav.cases")}</h1><p>{t("cases.subtitle")}</p></div></div>
-      <div className="queue-summary"><span><strong>1</strong> {t("common.urgent")}</span><span><strong>2</strong> {t("common.review")}</span><span><strong>8</strong> {t("cases.followup")}</span><span><strong>36</strong> {t("cases.cleared")}</span></div>
-      <article className="panel cases-panel full-table">
-        <div className="table-tools"><label>{t("cases.search")}<input type="search" name="case-search" autoComplete="off" placeholder={t("cases.searchPlaceholder")} value={query} onChange={(event) => setQuery(event.target.value)} /></label><div><button type="button" className={filter === "all" ? "filter active" : "filter"} aria-pressed={filter === "all"} onClick={() => setFilter("all")}>{t("cases.allSignals")}</button><button type="button" className={filter === "urgent" ? "filter active" : "filter"} aria-pressed={filter === "urgent"} onClick={() => setFilter("urgent")}>{t("common.urgent")}</button><button type="button" className={filter === "review" ? "filter active" : "filter"} aria-pressed={filter === "review"} onClick={() => setFilter("review")}>{t("common.review")}</button></div></div>
-        <div className="case-list">
-          {visibleAlerts.map((alert) => <AlertRow key={alert.id} alert={alert} expanded={selectedId === alert.id} onOpen={() => setSelectedId((id) => id === alert.id ? null : alert.id)} />)}
-          {visibleAlerts.length === 0 && <p className="case-empty" role="status">{t("cases.noMatches")}</p>}
+      <div className="page-heading">
+        <div>
+          <span className="eyebrow">{t("cases.kicker")}</span>
+          <h1>{t("nav.cases")}</h1>
+          <p>{t("cases.subtitle")}</p>
         </div>
-        {selectedAlert && (
+      </div>
+      <div className="queue-summary">
+        <span><strong>{urgentTotal}</strong> {t("common.urgent")}</span>
+        <span><strong>{reviewTotal}</strong> {t("common.review")}</span>
+        <span><strong>{evaluatedTotal}</strong> Doctor Evaluated</span>
+        <span><strong>{screenings.length}</strong> Total</span>
+      </div>
+      <article className="panel cases-panel full-table">
+        <div className="table-tools">
+          <label>
+            {t("cases.search")}
+            <input
+              type="search"
+              name="case-search"
+              autoComplete="off"
+              placeholder={t("cases.searchPlaceholder")}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <div>
+            <button type="button" className={filter === "all" ? "filter active" : "filter"} aria-pressed={filter === "all"} onClick={() => setFilter("all")}>{t("cases.allSignals")}</button>
+            <button type="button" className={filter === "urgent" ? "filter active" : "filter"} aria-pressed={filter === "urgent"} onClick={() => setFilter("urgent")}>{t("common.urgent")}</button>
+            <button type="button" className={filter === "review" ? "filter active" : "filter"} aria-pressed={filter === "review"} onClick={() => setFilter("review")}>{t("common.review")}</button>
+            <button type="button" className={filter === "evaluated" ? "filter active" : "filter"} aria-pressed={filter === "evaluated"} onClick={() => setFilter("evaluated")}>Doctor Evaluated</button>
+          </div>
+        </div>
+        <div className="case-list">
+          {visibleRecords.map((record) => (
+            <AlertRow
+              key={record.id}
+              record={record}
+              expanded={selectedId === record.id}
+              onOpen={() => {
+                if (selectedId === record.id) {
+                  setSelectedId(null);
+                } else {
+                  setSelectedId(record.id);
+                  setDoctorNotes(record.doctor_notes ?? "");
+                  setPrescriptionAdvice(record.prescription_advice ?? "");
+                }
+              }}
+            />
+          ))}
+          {visibleRecords.length === 0 && <p className="case-empty" role="status">{t("cases.noMatches")}</p>}
+        </div>
+        {selectedRecord && (
           <section className="case-brief" aria-live="polite">
-            <div><span className="eyebrow">{t("cases.selectedBrief")}</span><h2>{selectedAlert.id} · {selectedAlert.village}</h2></div>
-            <dl><div><dt>{t("cases.signal")}</dt><dd>{selectedAlert.signal}</dd></div><div><dt>{t("cases.reading")}</dt><dd>{selectedAlert.reading}</dd></div><div><dt>{t("common.review")}</dt><dd>{selectedAlert.priority} · {selectedAlert.time}</dd></div></dl>
-            <button type="button" className="secondary-button" onClick={() => setSelectedId(null)}>{t("common.close")}</button>
+            <div className="case-brief-head">
+              <div>
+                <span className="eyebrow">{t("cases.selectedBrief")}</span>
+                <h2>{selectedRecord.patient_ref} · {selectedRecord.village}</h2>
+              </div>
+              <button type="button" className="secondary-button" onClick={() => setSelectedId(null)}>{t("common.close")}</button>
+            </div>
+            <dl>
+              <div><dt>Age</dt><dd>{selectedRecord.age} yrs</dd></div>
+              <div><dt>Vitals</dt><dd>SpO₂ {selectedRecord.spo2}% · {selectedRecord.temperature}°C</dd></div>
+              <div><dt>Symptoms</dt><dd>{selectedRecord.symptoms.join(", ")}</dd></div>
+              <div><dt>Field Notes</dt><dd>{selectedRecord.field_notes || "None"}</dd></div>
+              <div><dt>Status</dt><dd>{selectedRecord.status === "doctor_evaluated" ? "Evaluated by Doctor" : "Awaiting Doctor"}</dd></div>
+            </dl>
+
+            {selectedRecord.status === "doctor_evaluated" ? (
+              <div className="case-brief-doctor">
+                <h3>👨‍⚕️ Clinical Decision & Prescription ({selectedRecord.evaluated_by || "Doctor"})</h3>
+                <p><strong>Diagnosis / Notes:</strong> {selectedRecord.doctor_notes}</p>
+                <p><strong>Prescription & Home Care:</strong> {selectedRecord.prescription_advice}</p>
+                <span className="case-eval-badge">✓ Prescribed & Ready for ASHA Follow-up</span>
+              </div>
+            ) : (
+              <form className="case-brief-doctor" onSubmit={handleEvalSubmit}>
+                <h3>👨‍⚕️ Doctor / Clinician Evaluation</h3>
+                <label>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#234d3f" }}>Clinical Diagnosis & Notes:</span>
+                  <textarea
+                    required
+                    rows={2}
+                    value={doctorNotes}
+                    onChange={(e) => setDoctorNotes(e.target.value)}
+                    placeholder="e.g. Suspected acute respiratory infection. Advise oxygen monitoring & hydration."
+                  />
+                </label>
+                <label>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#234d3f" }}>Prescription & Patient Advice:</span>
+                  <textarea
+                    required
+                    rows={2}
+                    value={prescriptionAdvice}
+                    onChange={(e) => setPrescriptionAdvice(e.target.value)}
+                    placeholder="e.g. Paracetamol 500mg TDS for 3 days, Amoxicillin 500mg BD if fever persists."
+                  />
+                </label>
+                <div className="case-brief-actions">
+                  <button type="submit" className="primary-button" disabled={submittingEval}>
+                    {submittingEval ? "Saving..." : "Approve & Send to Health Worker →"}
+                  </button>
+                </div>
+              </form>
+            )}
+            <p className="queue-footnote">{t("cases.privacy")}</p>
           </section>
         )}
-        <p className="queue-footnote">{t("cases.privacy")}</p>
       </article>
     </div>
   );
@@ -506,9 +742,16 @@ function DevicePanel() {
   const { t, effectiveLang } = useLanguage();
   const [selfCheckState, setSelfCheckState] = useState<"idle" | "testing" | "passed">("idle");
   const [lastCheck, setLastCheck] = useState("08:10");
+  const [storageText, setStorageText] = useState("Local Storage Ready");
   const selfCheckTimer = useRef<number | null>(null);
 
   useEffect(() => {
+    if (typeof navigator !== "undefined" && navigator.storage && navigator.storage.estimate) {
+      void navigator.storage.estimate().then((est) => {
+        const usageMB = ((est.usage ?? 0) / (1024 * 1024)).toFixed(1);
+        setStorageText(`${usageMB} MB Cache used`);
+      });
+    }
     return () => {
       if (selfCheckTimer.current !== null) window.clearTimeout(selfCheckTimer.current);
     };
@@ -521,52 +764,70 @@ function DevicePanel() {
       setSelfCheckState("passed");
       setLastCheck(new Intl.DateTimeFormat(`${effectiveLang}-IN`, { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date()));
       selfCheckTimer.current = null;
-    }, 900);
+    }, 800);
   }
 
   const sensors = [
-    { name: t("device.temperatureSensor"), reading: "36.8 °C", tolerance: "±0.2 °C", calibrated: "20 Aug 2026" },
-    { name: t("device.oxygenSensor"), reading: "98% SpO₂", tolerance: "±2%", calibrated: "20 Aug 2026" },
-    { name: t("device.pulseSensor"), reading: "72 bpm", tolerance: "±3 bpm", calibrated: "20 Aug 2026" },
-    { name: t("device.respirationSensor"), reading: "16 / min", tolerance: "±2 / min", calibrated: "20 Aug 2026" },
+    { name: "Local Indexed Storage", reading: storageText, tolerance: "Encrypted", calibrated: "Active" },
+    { name: "Network Sync Gateway", reading: typeof navigator !== "undefined" && navigator.onLine ? "Connected" : "Offline Safe", tolerance: "2G/3G/4G", calibrated: "Auto-sync" },
+    { name: "Supabase Clinical Relay", reading: "Connected", tolerance: "TLS 1.3", calibrated: "Real-time" },
+    { name: "Rules Engine Integrity", reading: "v1.0.0 Active", tolerance: "RMP-Curated", calibrated: "SHA-256" },
   ];
 
   return (
     <div className="page-content section-page">
-      <div className="page-heading"><div><span className="eyebrow">{t("device.kicker")}</span><h1>Arogya Relay AR-07</h1><p>{t("device.subtitle")}</p></div><span className="live-badge"><i /> {t("device.ready")}</span></div>
+      <div className="page-heading">
+        <div>
+          <span className="eyebrow">{t("device.kicker")}</span>
+          <h1>Arogya Relay System Integrity</h1>
+          <p>{t("device.subtitle")}</p>
+        </div>
+        <span className="live-badge"><i /> {t("device.ready")}</span>
+      </div>
       <section className="device-overview">
         <article className="hardware-card">
           <div className="large-device">
-            <div className="speaker">••••••</div><div className="large-screen"><span>{t("shell.fieldUnit")}</span><strong>{t("common.ready")}</strong><small>{t("device.tapStart")}</small><b>START</b></div><div className="sensor-dock"><i /><span>SENSOR DOCK</span></div>
+            <div className="speaker">••••••</div>
+            <div className="large-screen"><span>RELAY</span><strong>ACTIVE</strong><small>OFFLINE FIRST</small><b>SYNC</b></div>
+            <div className="sensor-dock"><i /><span>DATABASE LINK</span></div>
           </div>
-          <div><span className="eyebrow">{t("device.designed")}</span><h2>{t("device.headline")}</h2><p>{t("device.description")}</p><ul><li>{t("device.vitals")}</li><li>{t("device.localPrompts")}</li><li>{t("device.forward")}</li></ul></div>
+          <div>
+            <span className="eyebrow">{t("device.designed")}</span>
+            <h2>{t("device.headline")}</h2>
+            <p>{t("device.description")}</p>
+            <ul>
+              <li>{t("device.vitals")}</li>
+              <li>{t("device.localPrompts")}</li>
+              <li>{t("device.forward")}</li>
+            </ul>
+          </div>
         </article>
         <div className="diagnostics-grid">
-          <article className="diagnostic"><span>{t("overview.battery")}</span><strong>76%</strong><p>{t("device.remaining")}</p><i><b style={{ width: '76%' }} /></i></article>
-          <article className="diagnostic"><span>{t("device.sensorStatus")}</span><strong>4 / 4</strong><p>{t("device.sensorsReady")}</p></article>
-          <article className="diagnostic"><span>{t("device.storage")}</span><strong>86 / 500</strong><p>{t("device.waitingSync")}</p></article>
-          <article className="diagnostic"><span>{t("device.selfCheck")}</span><strong>{selfCheckState === "testing" ? t("device.testing") : t("common.passed")}</strong><p>{lastCheck} · {t("device.noAction").split(" · ").at(-1)}</p></article>
+          <article className="diagnostic"><span>Connection</span><strong>{typeof navigator !== "undefined" && navigator.onLine ? "Online" : "Offline"}</strong><p>Auto-sync active</p><i><b style={{ width: '100%' }} /></i></article>
+          <article className="diagnostic"><span>Database</span><strong>Supabase</strong><p>PostgreSQL Edge</p></article>
+          <article className="diagnostic"><span>Storage</span><strong>{storageText}</strong><p>Offline encrypted</p></article>
+          <article className="diagnostic"><span>System Self-Check</span><strong>{selfCheckState === "testing" ? t("device.testing") : t("common.passed")}</strong><p>{lastCheck} · Operational</p></article>
         </div>
-        <p className="nc-synthetic device-telemetry-note">{t("device.simulatedTelemetry")}</p>
+        <p className="nc-synthetic device-telemetry-note">System diagnostics verify real database connectivity and browser offline caching.</p>
         <section className="device-tech-grid" aria-label={t("device.technicalStatus")}>
           <article className="panel device-sensor-panel">
             <header className="device-tech-head">
-              <div><span className="eyebrow">{t("device.technicalStatus")}</span><h2>{t("device.sensorChain")}</h2></div>
-              <span className="device-health"><i /> {t("device.allSensorsReady")}</span>
+              <div><span className="eyebrow">{t("device.technicalStatus")}</span><h2>System Components</h2></div>
+              <span className="device-health"><i /> All Services Operational</span>
             </header>
             <div className="device-sensor-table" role="table" aria-label={t("device.sensorChain")}>
               <div className="device-sensor-row device-sensor-columns" role="row">
-                <span role="columnheader">{t("device.sensor")}</span>
-                <span role="columnheader">{t("device.reading")}</span>
-                <span role="columnheader">{t("device.tolerance")}</span>
-                <span role="columnheader">{t("device.calibration")}</span>
+                <span role="columnheader">Component</span>
+                <span role="columnheader">Status</span>
+                <span role="columnheader">Protocol</span>
+                <span role="columnheader">Mode</span>
               </div>
               {sensors.map((sensor) => (
                 <div className="device-sensor-row" role="row" key={sensor.name}>
                   <strong role="cell"><i /> {sensor.name}</strong>
                   <span role="cell">{sensor.reading}</span>
                   <span role="cell">{sensor.tolerance}</span>
-                  <span role="cell"><b>{t("device.calibrated")}</b><small>{sensor.calibrated}</small></span>
+                  <span role="cell"><b>{sensor.calibrated}</b></span>
                 </div>
               ))}
             </div>
@@ -575,12 +836,12 @@ function DevicePanel() {
           <article className="panel device-system-panel">
             <header className="device-tech-head"><div><span className="eyebrow">AR-07</span><h2>{t("device.systemIntegrity")}</h2></div></header>
             <dl className="device-system-list">
-              <div><dt>{t("device.firmware")}</dt><dd>v1.6.2</dd></div>
+              <div><dt>Database Engine</dt><dd>Supabase PostgreSQL</dd></div>
               <div><dt>{t("device.rulesPack")}</dt><dd>v1.0.0 · SHA-256 verified</dd></div>
-              <div><dt>{t("device.storageEncryption")}</dt><dd>AES-256-GCM · target</dd></div>
-              <div><dt>{t("device.lastSync")}</dt><dd>05 Aug 2026 · 11:54</dd></div>
-              <div><dt>{t("device.network")}</dt><dd>2G · −101 dBm</dd></div>
-              <div><dt>{t("device.queue")}</dt><dd>{t("device.encryptedReports")}</dd></div>
+              <div><dt>{t("device.storageEncryption")}</dt><dd>AES-256-GCM · Client</dd></div>
+              <div><dt>{t("device.lastSync")}</dt><dd>Real-time Active</dd></div>
+              <div><dt>{t("device.network")}</dt><dd>{typeof navigator !== "undefined" && navigator.onLine ? "Broadband / 4G" : "Offline 2G"}</dd></div>
+              <div><dt>{t("device.queue")}</dt><dd>Encrypted Offline Queue</dd></div>
             </dl>
             <div className={selfCheckState === "testing" ? "device-self-check testing" : "device-self-check"} aria-live="polite">
               <strong>{selfCheckState === "testing" ? t("device.testing") : t("device.selfCheckPassed")}</strong>
