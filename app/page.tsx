@@ -1,6 +1,7 @@
 "use client";
 
 import { LanguageSwitcher } from "./language-switcher";
+import { AccountPanel } from "./account-panel";
 
 import { FormEvent, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLanguage } from "@/lib/i18n/provider";
@@ -234,18 +235,10 @@ export default function Home() {
           </div>
           <p>{t("shell.offlineCapture")}</p>
         </div>
-        <div className="worker-card">
-          <div className="avatar">SN</div>
-          <div><strong>Sara Nongrum</strong><span>{t("shell.communityWorker")}</span></div>
-          <button type="button" aria-label={t("shell.accountMenu")} aria-expanded={accountOpen} onClick={() => { setAccountOpen((open) => !open); setNotificationsOpen(false); }}>•••</button>
-          {accountOpen && (
-            <div className="account-popover" role="region" aria-label={t("shell.accountMenu")}>
-              <strong>Sara Nongrum</strong>
-              <span>{t("shell.communityWorker")}</span>
-              <small>{t("shell.prototypeSession")}</small>
-            </div>
-          )}
-        </div>
+        <AccountPanel
+          open={accountOpen}
+          onToggle={() => { setAccountOpen((open) => !open); setNotificationsOpen(false); }}
+        />
       </aside>
 
       <section className="workspace" id="main-content">
