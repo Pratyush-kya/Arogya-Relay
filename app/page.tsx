@@ -340,6 +340,7 @@ export default function Home() {
 }
 
 function getTimeGreetingKey(): string {
+  if (typeof window === "undefined") return "overview.greeting";
   const hour = new Date().getHours();
   if (hour >= 4 && hour < 12) return "overview.greetingMorning";
   if (hour >= 12 && hour < 17) return "overview.greetingAfternoon";
@@ -348,14 +349,23 @@ function getTimeGreetingKey(): string {
 
 function Overview({ onOpenCases, onOpenDevice }: { onOpenCases: () => void; onOpenDevice: () => void }) {
   const { t } = useLanguage();
-  const [greetingKey, setGreetingKey] = useState<string>(getTimeGreetingKey);
+  const [greetingKey, setGreetingKey] = useState<string>("overview.greeting");
 
   useEffect(() => {
-    const updateGreeting = () => {
-      setGreetingKey(getTimeGreetingKey());
+    // Runs exclusively on the client device in the user's local timezone
+    const calculateGreeting = () => {
+      const hour = new Date().getHours();
+      if (hour >= 4 && hour < 12) {
+        setGreetingKey("overview.greetingMorning");
+      } else if (hour >= 12 && hour < 17) {
+        setGreetingKey("overview.greetingAfternoon");
+      } else {
+        setGreetingKey("overview.greetingEvening");
+      }
     };
-    updateGreeting();
-    const timer = window.setInterval(updateGreeting, 60000);
+
+    calculateGreeting();
+    const timer = window.setInterval(calculateGreeting, 30000);
     return () => window.clearInterval(timer);
   }, []);
 
