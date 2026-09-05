@@ -25,55 +25,20 @@ type Tab = "overview" | "cases" | "care" | "nearby" | "plan" | "device";
 type SyncState = "ready" | "syncing" | "done";
 type CaseFilter = "all" | "urgent" | "review" | "evaluated";
 
-const DEFAULT_BASELINE_SCREENINGS: ScreeningRecord[] = [
-  {
-    id: "NR-1048",
-    patient_ref: "NR-1048",
-    age: 6,
-    temperature: 38.9,
-    spo2: 91,
-    symptoms: ["Fever", "Rapid breathing"],
-    field_notes: "Rapid shallow breathing, lethargic",
-    village: "North Ridge",
-    urgency_tier: "urgent",
-    status: "pending_doctor_review",
-    created_at: new Date(Date.now() - 12 * 60000).toISOString(),
-    synced: true,
-  },
-  {
-    id: "MR-0321",
-    patient_ref: "MR-0321",
-    age: 42,
-    temperature: 39.2,
-    spo2: 97,
-    symptoms: ["Persistent fever", "Severe headache"],
-    field_notes: "Fever on day 4, chills",
-    village: "Mawlynnong",
-    urgency_tier: "review",
-    status: "doctor_evaluated",
-    doctor_notes: "Likely viral infection. Paracetamol 500mg TDS, hydration. Review in 48h.",
-    prescription_advice: "Paracetamol 500mg, ORS packets, rest",
-    evaluated_by: "Dr. Sharma",
-    created_at: new Date(Date.now() - 46 * 60000).toISOString(),
-    synced: true,
-  },
-  {
-    id: "PV-0876",
-    patient_ref: "PV-0876",
-    age: 68,
-    temperature: 37.6,
-    spo2: 93,
-    symptoms: ["Cough", "Low oxygen", "Severe fatigue"],
-    field_notes: "Chronic smoker, mild wheeze",
-    village: "Pynursla",
-    urgency_tier: "review",
-    status: "pending_doctor_review",
-    created_at: new Date(Date.now() - 60 * 60000).toISOString(),
-    synced: true,
-  },
-];
-
-const chartBars = [28, 39, 31, 47, 44, 58, 64, 52, 73, 68, 82, 88];
+function computeActivityBars(records: ScreeningRecord[]): number[] {
+  if (records.length === 0) {
+    return [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8];
+  }
+  const bins = new Array(12).fill(0);
+  const now = Date.now();
+  for (const r of records) {
+    const ageHours = (now - new Date(r.created_at).getTime()) / (3600 * 1000);
+    const binIndex = 11 - Math.min(11, Math.max(0, Math.floor(ageHours / 2)));
+    bins[binIndex]++;
+  }
+  const max = Math.max(...bins, 1);
+  return bins.map((count) => Math.max(8, Math.round((count / max) * 100)));
+}
 
 export function DynamicGreeting() {
   const { t } = useLanguage();
@@ -120,7 +85,7 @@ export default function Home() {
   const [noticeKey, setNoticeKey] = useState("shell.reportsStored");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [screenings, setScreenings] = useState<ScreeningRecord[]>(DEFAULT_BASELINE_SCREENINGS);
+  const [screenings, setScreenings] = useState<ScreeningRecord[]>([]);
   const syncTimer = useRef<number | null>(null);
   const modalRef = useRef<HTMLElement | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);
@@ -129,9 +94,7 @@ export default function Home() {
     let alive = true;
     void fetchAllScreenings().then((data) => {
       if (!alive) return;
-      if (data && data.length > 0) {
-        setScreenings(data);
-      }
+      setScreenings(data || []);
     });
     return () => {
       alive = false;
@@ -437,12 +400,6 @@ export default function Home() {
   );
 }
 
-function getLocalGreetingKey(): string {
-  const hour = new Date().getHours();
-  if (hour >= 4 && hour < 12) return "overview.greetingMorning";
-  if (hour >= 12 && hour < 17) return "overview.greetingAfternoon";
-  return "overview.greetingEvening";
-}
 
 function Overview({
   screenings,
@@ -500,13 +457,13 @@ function Overview({
           <div className="mini-chart" aria-label="Respiratory symptom reports increased across the last twelve hours">
             <div className="chart-meta"><span>{t("overview.reports2h")}</span><strong>{totalCount} <small>Active</small></strong></div>
             <div className="bars">
-              {chartBars.map((height, index) => <i key={index} style={{ height: `${height}%` }} className={index > 8 ? "hot" : ""} />)}
+              {computeActivityBars(screenings).map((height, index) => <i key={index} style={{ height: `${height}%` }} className={index > 8 && height > 40 ? "hot" : ""} />)}
             </div>
             <div className="chart-axis"><span>06:00</span><span>12:00</span><span>18:00</span><span>Now</span></div>
           </div>
         </article>
 
-        {mostUrgent && (
+        {mostUrgent ? (
           <article className="urgent-card">
             <header><span>{t("overview.urgentQueue")}</span><b>{urgentCount || 1}</b></header>
             <div className="urgent-person">
@@ -517,6 +474,19 @@ function Overview({
             </div>
             <div className="urgent-reading"><span>SpO₂</span><strong>{mostUrgent.spo2}%</strong><em>{mostUrgent.temperature}°C</em></div>
             <p className="urgent-note">{mostUrgent.symptoms.join(", ")}</p>
+            <button type="button" onClick={onOpenCases}>{t("overview.openBrief")} <span>→</span></button>
+          </article>
+        ) : (
+          <article className="urgent-card cleared-card">
+            <header><span>{t("overview.urgentQueue")}</span><b style={{ background: "var(--forest)" }}>0</b></header>
+            <div className="urgent-person">
+              <div className="avatar" style={{ background: "var(--mint)", color: "var(--forest)" }}>✓</div>
+              <div><h3>Triage Queue Clear</h3><p>Active monitoring · 0 critical alerts</p></div>
+            </div>
+            <div className="urgent-reading" style={{ background: "#eef7f2", color: "#166534" }}>
+              <span>Status</span><strong style={{ fontSize: "16px", color: "#166534" }}>Normal</strong><em>No active emergency</em>
+            </div>
+            <p className="urgent-note">No urgent patient vitals flagged. All community field signals are currently within normal baseline thresholds.</p>
             <button type="button" onClick={onOpenCases}>{t("overview.openBrief")} <span>→</span></button>
           </article>
         )}
@@ -536,7 +506,14 @@ function Overview({
             <button type="button" onClick={onOpenCases}>{t("overview.viewAll")} →</button>
           </header>
           <div className="case-list">
-            {screenings.slice(0, 3).map((record) => <AlertRow key={record.id} record={record} onOpen={onOpenCases} />)}
+            {screenings.length > 0 ? (
+              screenings.slice(0, 3).map((record) => <AlertRow key={record.id} record={record} onOpen={onOpenCases} />)
+            ) : (
+              <div className="empty-signals-card" role="status">
+                <p>No screening signals recorded yet.</p>
+                <small>Tap &ldquo;＋ New screening&rdquo; in the top bar to record patient vitals.</small>
+              </div>
+            )}
           </div>
         </article>
         <article className="panel device-card">

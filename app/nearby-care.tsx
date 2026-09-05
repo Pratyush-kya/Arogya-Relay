@@ -190,8 +190,6 @@ export default function NearbyCare() {
         </div>
       </div>
 
-      <p className="nc-synthetic">{t("nearby.demo")}</p>
-
       <div className="cg-emergency" role="alert">
         <div className="cg-emergency-head"><span className="cg-pulse" aria-hidden="true" /><strong>{t("emergency.title")}</strong></div>
         <p className="cg-immediate">{t("emergency.call112")}</p>
@@ -303,7 +301,7 @@ export default function NearbyCare() {
       )}
 
       <div className="protocol-note" style={{ marginTop: 18 }}>
-        <strong>Referral support only.</strong> Facility and camp data are synthetic demonstrations. HFR registration is not proof a facility is open or has beds. Always call to confirm. Arogya Relay does not dispatch ambulances.
+        <strong>Referral support only.</strong> HFR registration is not proof a facility is open or has beds. Always call to confirm. Arogya Relay does not dispatch ambulances.
       </div>
     </div>
   );

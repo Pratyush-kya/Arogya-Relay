@@ -36,7 +36,6 @@ import {
 import { toICS, PUSH_PRODUCTION_NOTE } from "@/lib/careplan/fhir.ts";
 import type {
   CareItem,
-  CarePlan,
   Frequency,
   MedicationOrder,
   PatientRef,
@@ -45,89 +44,35 @@ import type {
 } from "@/lib/careplan/types.ts";
 import { useLanguage } from "@/lib/i18n/provider";
 
-// ── Synthetic demo fixtures (no real PHI) ──────────────────────────────────
-const DEMO_PATIENT: PatientRef = {
-  id: "pt-NR1049",
-  reference: "NR-1049",
-  ageGroup: "adult",
-  pregnant: false,
-  allergies: ["penicillin"],
-};
-
-const DEMO_DOCTOR: Practitioner = { id: "dr-001", role: "doctor", displayName: "Dr. I. Marak", regNo: "RMP-MEG-1234" };
-
-const DEMO_PLAN: CarePlan = {
-  id: "cp-001",
-  patientId: DEMO_PATIENT.id,
-  practitionerId: DEMO_DOCTOR.id,
-  title: "Post-fever recovery plan",
-  startDate: "2026-08-20",
-  endDate: "2026-08-27",
-  languageAccepted: "en",
-  packVersion: "1.0.0",
-  status: "active",
-  createdAt: "2026-08-20T08:00:00",
-  updatedAt: "2026-08-20T08:00:00",
-  version: 2,
-};
-
-function mkOrder(over: Partial<MedicationOrder>): MedicationOrder {
+function mkEmptyOrder(): MedicationOrder {
+  const current = new Date();
+  const todayStr = current.toISOString().slice(0, 10);
+  const nextWeekStr = new Date(current.getTime() + 7 * 86400000).toISOString().slice(0, 10);
   return {
-    id: "mo-001",
-    carePlanId: DEMO_PLAN.id,
-    patientId: DEMO_PATIENT.id,
-    medicine: "Paracetamol",
-    strength: "500 mg",
+    id: "mo-draft",
+    carePlanId: "cp-active",
+    patientId: "pt-current",
+    medicine: "",
+    strength: "",
     form: "tablet",
     dose: "1 tablet",
     route: "oral",
-    frequency: { kind: "times_per_day", times: 3 },
+    frequency: { kind: "times_per_day", times: 2 },
     foodRelation: "after_food",
-    indication: "Fever and pain",
-    instructions: "Take after food. Do not exceed 3 per day.",
-    startDate: "2026-08-20",
-    endDate: "2026-08-27",
+    indication: "",
+    instructions: "Take with water after food.",
+    startDate: todayStr,
+    endDate: nextWeekStr,
     highRisk: false,
-    signedByDoctorId: DEMO_DOCTOR.id,
-    signedAt: "2026-08-20T08:05:00",
-    signature: "sig-demo",
-    status: "active",
-    createdAt: "2026-08-20T08:00:00",
-    updatedAt: "2026-08-20T08:00:00",
-    version: 2,
-    ...over,
+    signedByDoctorId: null,
+    signedAt: null,
+    signature: null,
+    status: "draft",
+    createdAt: current.toISOString(),
+    updatedAt: current.toISOString(),
+    version: 1,
   };
 }
-
-const DEMO_ORDERS: MedicationOrder[] = [
-  mkOrder({}),
-  mkOrder({
-    id: "mo-002",
-    medicine: "Amoxicillin",
-    indication: "Infection",
-    instructions: "Complete the full course even if you feel better.",
-    frequency: { kind: "times_per_day", times: 2 },
-  }),
-];
-
-const DEMO_ITEMS: CareItem[] = [
-  {
-    id: "ci-001",
-    carePlanId: DEMO_PLAN.id,
-    patientId: DEMO_PATIENT.id,
-    type: "appointment",
-    title: "Follow-up at CHC Pynursla",
-    detail: "Review recovery and repeat vitals.",
-    scheduledAt: "2026-08-23T10:00:00",
-    prep: ["Fasting not required", "Carry previous prescription"],
-    documentsToCarry: ["Care plan summary", "ID card"],
-    signedByDoctorId: DEMO_DOCTOR.id,
-    status: "active",
-    version: 1,
-    createdAt: "2026-08-20T08:10:00",
-    updatedAt: "2026-08-20T08:10:00",
-  },
-];
 
 const FREQ_OPTIONS: { value: Frequency["kind"]; label: string }[] = [
   { value: "once", label: "One-time" },
@@ -142,36 +87,66 @@ const FREQ_OPTIONS: { value: Frequency["kind"]; label: string }[] = [
 export default function CarePlanView() {
   const { t } = useLanguage();
   const [role, setRole] = useState<Role>("doctor");
-  const [now, setNow] = useState("2026-08-21T09:30:00");
+  const [now, setNow] = useState(() => new Date().toISOString().slice(0, 16));
+  const today = now.slice(0, 10);
+
+  const [patientRef, setPatientRef] = useState("NR-1001");
+  const [doctor] = useState<Practitioner>({
+    id: "dr-001",
+    role: "doctor",
+    displayName: "Dr. Clinician",
+    regNo: "RMP-IN-2026",
+  });
+
+  const [orders, setOrders] = useState<MedicationOrder[]>([]);
+  const [items] = useState<CareItem[]>([]);
 
   // Editor draft order
-  const [draft, setDraft] = useState<MedicationOrder>(() =>
-    mkOrder({ id: "mo-new", signedByDoctorId: null, signedAt: null, signature: null, status: "draft" }),
-  );
+  const [draft, setDraft] = useState<MedicationOrder>(mkEmptyOrder);
   const [signMsg, setSignMsg] = useState<string | null>(null);
+
+  const currentPatient: PatientRef = useMemo(
+    () => ({
+      id: `pt-${patientRef}`,
+      reference: patientRef,
+      ageGroup: "adult",
+      pregnant: false,
+      allergies: [],
+    }),
+    [patientRef]
+  );
 
   const issues = useMemo(() => validateOrderCompleteness(draft), [draft]);
   const blocking = issues.filter((i) => i.severity === "blocking");
-  const dups = useMemo(() => findDuplicateActiveOrders(DEMO_ORDERS, draft), [draft]);
-  const allergy = useMemo(() => allergyConflict(draft, DEMO_PATIENT), [draft]);
+  const dups = useMemo(() => findDuplicateActiveOrders(orders, draft), [draft, orders]);
+  const allergy = useMemo(() => allergyConflict(draft, currentPatient), [draft, currentPatient]);
 
-  const windowStart = "2026-08-21T00:00:00";
-  const windowEnd = "2026-08-21T23:59:59";
+  const windowStart = `${today}T00:00:00`;
+  const windowEnd = `${today}T23:59:59`;
   const reminders = useMemo(
-    () => buildReminders({ orders: DEMO_ORDERS, items: DEMO_ITEMS, windowStart, windowEnd, now }),
-    [now],
+    () => buildReminders({ orders, items, windowStart, windowEnd, now }),
+    [orders, items, windowStart, windowEnd, now],
   );
 
   const sign = () => {
     try {
-      assertCanPrescribe({ id: DEMO_DOCTOR.id, role });
+      assertCanPrescribe({ id: doctor.id, role });
       if (!isSignable(draft)) {
         setSignMsg("Cannot sign: resolve blocking issues first.");
         return;
       }
-      const signed = { ...draft, signedByDoctorId: DEMO_DOCTOR.id, signedAt: now, signature: signOrderPayload(draft), status: "active" as const };
+      const signed: MedicationOrder = {
+        ...draft,
+        id: `mo-${Date.now().toString(36)}`,
+        patientId: currentPatient.id,
+        signedByDoctorId: doctor.id,
+        signedAt: now,
+        signature: signOrderPayload(draft),
+        status: "active" as const,
+      };
       setDraft(signed);
-      setSignMsg("Signed by " + DEMO_DOCTOR.displayName + " (RMP " + DEMO_DOCTOR.regNo + ").");
+      setOrders((prev) => [signed, ...prev.filter((o) => o.id !== signed.id)]);
+      setSignMsg("Signed by " + doctor.displayName + " (Reg: " + doctor.regNo + ").");
     } catch (e) {
       setSignMsg(e instanceof AuthorizationError ? e.message : "Signing failed.");
     }
@@ -202,9 +177,6 @@ export default function CarePlanView() {
           <button type="button" className={role === "patient" ? "active" : ""} aria-pressed={role === "patient"} onClick={() => setRole("patient")}>{t("plan.patient")}</button>
         </div>
       </div>
-
-      <p className="nc-synthetic">{t("plan.demo")}</p>
-      <p className="nc-synthetic">{t("plan.reviewedEnglish")}</p>
 
       {role === "doctor" ? (
         <section className="cg-card cp-editor">
@@ -299,7 +271,19 @@ export default function CarePlanView() {
         </section>
       ) : (
         <section className="cg-card">
-          <h2>{t("plan.schedule")} — {DEMO_PATIENT.reference}</h2>
+          <div className="cp-patient-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <h2>{t("plan.schedule")} — {patientRef}</h2>
+            <label style={{ fontSize: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+              Patient Ref:
+              <input
+                type="text"
+                value={patientRef}
+                onChange={(e) => setPatientRef(e.target.value)}
+                style={{ width: "120px", padding: "4px 8px", borderRadius: "6px", border: "1px solid var(--line)" }}
+                placeholder="e.g. NR-1001"
+              />
+            </label>
+          </div>
           <div className="cp-now">
             <label>{t("plan.demoClock")}
               <input type="datetime-local" value={now} onChange={(e) => setNow(e.target.value.replace("T", "T") + ":00")} />
@@ -308,10 +292,17 @@ export default function CarePlanView() {
           </div>
 
           <ul className="cp-list">
-            {reminders.length === 0 && <li className="nc-empty">{t("plan.noReminders")}</li>}
+            {reminders.length === 0 && (
+              <li className="nc-empty" style={{ padding: "28px 16px", textAlign: "center" }}>
+                <strong>{t("plan.noReminders")}</strong>
+                <p style={{ margin: "6px 0 0", fontSize: "12px", color: "var(--muted)" }}>
+                  Switch to Clinician Workspace to author and sign active medication orders.
+                </p>
+              </li>
+            )}
             {reminders.map((r) => {
-              const order = DEMO_ORDERS.find((o) => o.id === r.sourceId);
-              const item = DEMO_ITEMS.find((i) => i.id === r.sourceId);
+              const order = orders.find((o) => o.id === r.sourceId);
+              const item = items.find((i) => i.id === r.sourceId);
               const taper = order ? activeTaperStep(order, r.dueAt.slice(0, 10)) : null;
               const advice = order ? missedDoseAdviceFor(order) : DEFAULT_MISSED_DOSE_ADVICE;
               return (
