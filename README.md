@@ -1,5 +1,9 @@
 # Arogya Relay
 
+[![Deployed on Vercel](https://vercelbadge.vercel.app/api/button)](https://arogya-relay.vercel.app)
+
+**🌍 Live Demo:** [https://arogya-relay.vercel.app](https://arogya-relay.vercel.app)
+
 Arogya Relay is an offline-first disease-monitoring interface designed for
 community health workers operating in remote and low-connectivity areas. The
 prototype explores how field teams could record screenings, identify emerging
