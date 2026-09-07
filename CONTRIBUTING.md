@@ -1,21 +1,17 @@
-# Contributing to Arogya Relay
+# Contributing
 
-Use synthetic demonstration data only. Do not add real names, patient records,
-phone numbers, coordinates, prescriptions, credentials, tokens, or private
-clinical documents to code, screenshots, fixtures, issues, or pull requests.
+We love your input! We want to make contributing to this project as easy and transparent as possible.
 
-## Development
+## Pull Request Process
 
-1. Create a branch from `main`.
-2. Copy `.env.example` to `.env.local` only when an API gate is required.
-3. Install with `npm ci` and run with `npm run dev`.
-4. Keep safety-critical copy explicit: screening support is not diagnosis, and
-   clinician review is required for medicine orders.
-5. Run `npm run check` before opening a pull request.
+1. Fork the repo and create your branch from `main`.
+2. If you've added code that should be tested, add tests.
+3. Ensure the test suite passes.
+4. Make sure your code lints.
+5. Submit your pull request!
 
-## Pull requests
+## License
+By contributing to this repository, you agree that your contributions will be licensed under its MIT License.
 
-Describe the user-visible change, security/privacy impact, accessibility impact,
-and tests performed. Keep changes focused and include screenshots only when they
-contain synthetic data. Never weaken authentication, input validation, CSP,
-permissions policy, or clinical safety wording for convenience.
+## Bug Reports
+We use GitHub issues to track public bugs. Report a bug by opening a new issue.
