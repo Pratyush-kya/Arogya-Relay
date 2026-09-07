@@ -1,6 +1,5 @@
 # Arogya Relay
 
-[![Deployed on Vercel](https://vercelbadge.vercel.app/api/button)](https://arogya-relay.vercel.app)
 
 **🌍 Live Demo:** [https://arogya-relay.vercel.app](https://arogya-relay.vercel.app)
 
